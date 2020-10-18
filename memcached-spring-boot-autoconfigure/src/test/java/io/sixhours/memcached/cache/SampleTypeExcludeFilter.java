@@ -15,21 +15,15 @@
  */
 package io.sixhours.memcached.cache;
 
-import com.google.appengine.api.memcache.MemcacheServiceFactory;
+import org.springframework.boot.context.TypeExcludeFilter;
+import org.springframework.core.type.classreading.MetadataReader;
+import org.springframework.core.type.classreading.MetadataReaderFactory;
 
-/**
- * Factory for the AppEngine {@link MemcachedCacheManager} instances.
- *
- * @author Igor Bolic
- */
-public class AppEngineMemcachedCacheManagerFactory extends MemcachedCacheManagerFactory {
+public class SampleTypeExcludeFilter extends TypeExcludeFilter {
 
-    public AppEngineMemcachedCacheManagerFactory(MemcachedCacheProperties properties) {
-        super(properties);
-    }
+	@Override
+	public boolean match(MetadataReader metadataReader, MetadataReaderFactory metadataReaderFactory) {
+		return metadataReader.getClassMetadata().getClassName().equals(XMemcachedCacheAutoConfiguration.class.getName());
+	}
 
-    @Override
-    IMemcachedClient memcachedClient() {
-        return new AppEngineMemcachedClient(MemcacheServiceFactory.getMemcacheService());
-    }
 }

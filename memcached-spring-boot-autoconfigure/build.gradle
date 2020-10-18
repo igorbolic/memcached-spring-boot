@@ -9,13 +9,14 @@ dependencies {
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     optionalImplementation "com.googlecode.xmemcached:xmemcached:${xmemcachedVersion}"
+    optionalImplementation "com.amazonaws:elasticache-java-cluster-client:${elasticacheVersion}"
     optionalImplementation "com.google.appengine:appengine-api-1.0-sdk:${appengineApiVersion}"
 
     optionalImplementation 'org.springframework.boot:spring-boot-actuator'
-    optionalImplementation 'org.springframework.cloud:spring-cloud-context'
     optionalImplementation 'io.micrometer:micrometer-core'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.cloud:spring-cloud-commons:2.2.5.RELEASE'
     integrationTestImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
 }
 

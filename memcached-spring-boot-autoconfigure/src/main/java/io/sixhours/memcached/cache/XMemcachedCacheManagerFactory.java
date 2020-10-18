@@ -15,25 +15,21 @@
  */
 package io.sixhours.memcached.cache;
 
+import net.rubyeye.xmemcached.CommandFactory;
 import net.rubyeye.xmemcached.MemcachedClientBuilder;
 import net.rubyeye.xmemcached.MemcachedSessionLocator;
 import net.rubyeye.xmemcached.XMemcachedClientBuilder;
 import net.rubyeye.xmemcached.aws.AWSElasticCacheClientBuilder;
 import net.rubyeye.xmemcached.command.BinaryCommandFactory;
 import net.rubyeye.xmemcached.command.TextCommandFactory;
-import net.rubyeye.xmemcached.impl.ElectionMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.KetamaMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.LibmemcachedMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.PHPMemcacheSessionLocator;
-import net.rubyeye.xmemcached.impl.RandomMemcachedSessionLocaltor;
-import net.rubyeye.xmemcached.impl.RoundRobinMemcachedSessionLocator;
+import net.rubyeye.xmemcached.impl.*;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
 
 /**
- * Factory for the {@link MemcachedCacheManager} instances.
+ * Factory for the XMemcached {@link MemcachedCacheManager} instances.
  *
  * @author Igor Bolic
  */
@@ -48,27 +44,48 @@ public class XMemcachedCacheManagerFactory extends MemcachedCacheManagerFactory 
         final List<InetSocketAddress> servers = properties.getServers();
         final MemcachedCacheProperties.Provider provider = properties.getProvider();
         final MemcachedCacheProperties.Protocol protocol = properties.getProtocol();
+        final MemcachedCacheProperties.HashStrategy hashStrategy = properties.getHashStrategy();
 
-        final MemcachedClientBuilder builder = MemcachedCacheProperties.Provider.AWS.equals(provider) ?
-                new AWSElasticCacheClientBuilder(servers) : new XMemcachedClientBuilder(servers);
+        final MemcachedClientBuilder builder = builder(provider, servers);
 
         if (builder instanceof AWSElasticCacheClientBuilder) {
             ((AWSElasticCacheClientBuilder) builder)
                     .setPollConfigIntervalMs(properties.getServersRefreshInterval().toMillis());
         }
-        builder.setOpTimeout(properties.getOperationTimeout().toMillis());
-        builder.setCommandFactory(MemcachedCacheProperties.Protocol.BINARY.equals(protocol) ?
-                new BinaryCommandFactory() : new TextCommandFactory());
 
-        if (properties.getHashStrategy() != MemcachedCacheProperties.HashStrategy.STANDARD) {
-            builder.setSessionLocator(getSessionLocator(properties.getHashStrategy()));
-        }
+        builder.setSessionLocator(hashStrategyToLocator(hashStrategy));
+        builder.setOpTimeout(properties.getOperationTimeout().toMillis());
+        builder.setCommandFactory(commandFactory(protocol));
 
         return new XMemcachedClient(builder.build());
     }
 
-    private MemcachedSessionLocator getSessionLocator(MemcachedCacheProperties.HashStrategy hashStrategy) {
+    private MemcachedClientBuilder builder(MemcachedCacheProperties.Provider provider, List<InetSocketAddress> servers) {
+        switch (provider) {
+            case STATIC:
+                return new XMemcachedClientBuilder(servers);
+            case AWS:
+                new AWSElasticCacheClientBuilder(servers);
+            default:
+                throw new IllegalArgumentException("Invalid provider for the XMemcached configuration");
+        }
+    }
+
+    private CommandFactory commandFactory(MemcachedCacheProperties.Protocol protocol) {
+        switch (protocol) {
+            case TEXT:
+                return new TextCommandFactory();
+            case BINARY:
+                return new BinaryCommandFactory();
+            default:
+                throw new IllegalArgumentException("Invalid protocol for the XMemcached configuration");
+        }
+    }
+
+    private MemcachedSessionLocator hashStrategyToLocator(MemcachedCacheProperties.HashStrategy hashStrategy) {
         switch (hashStrategy) {
+            case STANDARD:
+                return new ArrayMemcachedSessionLocator();
             case LIBMEMCACHED:
                 return new LibmemcachedMemcachedSessionLocator();
             case KETAMA:
@@ -80,8 +97,9 @@ public class XMemcachedCacheManagerFactory extends MemcachedCacheManagerFactory 
             case ROUNDROBIN:
                 return new RoundRobinMemcachedSessionLocator();
             case RANDOM:
-            default:
                 return new RandomMemcachedSessionLocaltor();
+            default:
+                throw new IllegalArgumentException("Invalid hash strategy for the XMemcached configuration");
         }
     }
 }

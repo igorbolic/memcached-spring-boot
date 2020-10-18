@@ -15,26 +15,22 @@
  */
 package io.sixhours.memcached.cache;
 
-import net.rubyeye.xmemcached.impl.ArrayMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.ElectionMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.KetamaMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.LibmemcachedMemcachedSessionLocator;
-import net.rubyeye.xmemcached.impl.PHPMemcacheSessionLocator;
-import net.rubyeye.xmemcached.impl.RandomMemcachedSessionLocaltor;
-import net.rubyeye.xmemcached.impl.RoundRobinMemcachedSessionLocator;
-import org.junit.After;
+import net.rubyeye.xmemcached.impl.*;
 import org.junit.Test;
+import org.springframework.beans.BeanInstantiationException;
 import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.UnsatisfiedDependencyException;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration;
-import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.cache.support.NoOpCacheManager;
 import org.springframework.cloud.autoconfigure.RefreshAutoConfiguration;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -42,7 +38,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static io.sixhours.memcached.cache.MemcachedAssertions.assertMemcachedCacheManager;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 /**
@@ -53,174 +48,212 @@ import static org.mockito.Mockito.mock;
  */
 public class MemcachedAutoConfigurationTest {
 
-    private final AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext();
-
-    @After
-    public void tearDown() {
-        applicationContext.close();
-    }
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(CacheAutoConfiguration.class, MemcachedCacheAutoConfiguration.class));
 
     @Test
     public void whenCachingNotEnabledThenMemcachedNotLoaded() {
-        loadContext(EmptyConfiguration.class);
-
-        assertThatThrownBy(() ->
-                this.applicationContext.getBean(MemcachedCacheManager.class)
-        )
-                .isInstanceOf(NoSuchBeanDefinitionException.class)
-                .hasMessage("No qualifying bean of type 'io.sixhours.memcached.cache.MemcachedCacheManager' available");
+        this.contextRunner.withUserConfiguration(EmptyConfiguration.class)
+                .run(context -> assertThat(context).doesNotHaveBean(MemcachedCacheManager.class));
     }
 
     @Test
     public void whenCacheTypeIsNoneThenMemcachedNotLoaded() {
-        loadContext(CacheConfiguration.class, "spring.cache.type=none");
-
-        assertThatThrownBy(() ->
-                this.applicationContext.getBean(MemcachedCacheManager.class)
-        )
-                .isInstanceOf(NoSuchBeanDefinitionException.class)
-                .hasMessage("No qualifying bean of type 'io.sixhours.memcached.cache.MemcachedCacheManager' available");
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("spring.cache.type=none")
+                .run(context -> assertThat(context).doesNotHaveBean(MemcachedCacheManager.class));
     }
 
     @Test
     public void whenCacheTypeIsNoneThenNoOpCacheLoaded() {
-        loadContext(CacheConfiguration.class, "spring.cache.type=none");
-
-        CacheManager cacheManager = this.applicationContext.getBean(CacheManager.class);
-
-        assertThat(cacheManager).isInstanceOf(NoOpCacheManager.class);
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("spring.cache.type=none")
+                .run(context -> cacheManager(context, NoOpCacheManager.class));
     }
 
     @Test
     public void whenCacheTypeIsSimpleThenMemcachedNotLoaded() {
-        loadContext(CacheConfiguration.class, "spring.cache.type=simple");
-
-        assertThatThrownBy(() ->
-                this.applicationContext.getBean(MemcachedCacheManager.class)
-        )
-                .isInstanceOf(NoSuchBeanDefinitionException.class)
-                .hasMessage("No qualifying bean of type 'io.sixhours.memcached.cache.MemcachedCacheManager' available");
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("spring.cache.type=simple")
+                .run(context -> assertThat(context).doesNotHaveBean(MemcachedCacheManager.class));
     }
 
     @Test
     public void whenCacheTypeIsSimpleThenSimpleCacheLoaded() {
-        loadContext(CacheConfiguration.class, "spring.cache.type=simple");
-
-        CacheManager cacheManager = this.applicationContext.getBean(CacheManager.class);
-
-        assertThat(cacheManager).isInstanceOf(ConcurrentMapCacheManager.class);
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("spring.cache.type=simple")
+                .run(context -> cacheManager(context, ConcurrentMapCacheManager.class));
     }
 
     @Test
     public void whenCacheTypeIsInvalidThenContextNotLoaded() {
-        assertThatThrownBy(() ->
-                loadContext(CacheConfiguration.class, "spring.cache.type=invalid-type")
-        )
-                .isInstanceOf(BeanCreationException.class)
-                .hasMessageContaining("Failed to bind properties under 'spring.cache.type' to org.springframework.boot.autoconfigure.cache.CacheType");
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("spring.cache.type=invalid-type")
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(BeanCreationException.class)
+                        .hasMessageContaining("Failed to bind properties under 'spring.cache.type'")
+                );
     }
 
     @Test
     public void whenUsingCustomCacheManagerThenMemcachedCacheManagerNotLoaded() {
-        loadContext(CacheWithCustomCacheManagerConfiguration.class);
-
-        assertThatThrownBy(() ->
-                this.applicationContext.getBean(MemcachedCacheManager.class)
-        )
-                .isInstanceOf(NoSuchBeanDefinitionException.class)
-                .hasMessage("No qualifying bean of type 'io.sixhours.memcached.cache.MemcachedCacheManager' available");
+        this.contextRunner.withUserConfiguration(CacheWithCustomCacheManagerConfiguration.class)
+                .run(context -> assertThat(context).doesNotHaveBean(MemcachedCacheManager.class));
     }
 
     @Test
     public void whenUsingCustomCacheManagerThenMemcachedCustomCacheManagerLoaded() {
-        loadContext(CacheWithCustomCacheManagerConfiguration.class);
-
-        CacheManager cacheManager = this.applicationContext.getBean(CacheManager.class);
-
-        assertThat(cacheManager).isInstanceOf(ConcurrentMapCacheManager.class);
+        this.contextRunner.withUserConfiguration(CacheWithCustomCacheManagerConfiguration.class)
+                .run(context -> cacheManager(context, ConcurrentMapCacheManager.class));
     }
 
     @Test
     public void whenNoCustomCacheManagerThenMemcachedCacheManagerLoaded() {
-        loadContext(CacheConfiguration.class);
-
-        CacheManager cacheManager = this.applicationContext.getBean(CacheManager.class);
-
-        assertThat(cacheManager).isInstanceOf(MemcachedCacheManager.class);
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .run(context -> cacheManager(context, MemcachedCacheManager.class));
     }
 
     @Test
     public void whenRefreshAutoConfigurationThenRefreshConfigurationLoaded() {
-        loadContext(CacheWithRefreshAutoConfiguration.class);
-
-        assertThat(this.applicationContext
-                .getBeanDefinition("scopedTarget.cacheManager").getScope()).isEqualTo("refresh");
+        this.contextRunner.withUserConfiguration(CacheWithRefreshAutoConfiguration.class)
+                .run(context -> {
+                    assertThat(context.getBeanDefinitionNames()).contains("cacheManager");
+                    assertThat(context.getBeansWithAnnotation(RefreshScope.class)).hasSize(1);
+                    assertThat(context.getBeansWithAnnotation(RefreshScope.class).get("scopedTarget.cacheManager")).isInstanceOf(DisposableMemcachedCacheManager.class);
+                });
     }
 
     @Test
     public void whenMemcachedCacheManagerBeanAlreadyInContextThenMemcachedWithNonCustomConfigurationLoaded() {
-        loadContext(CacheWithMemcachedCacheManagerConfiguration.class, "memcached.cache.expiration=3600",
-                "memcached.cache.prefix=custom:prefix",
-                "memcached.cache.namespace=custom_namespace");
+        this.contextRunner.withUserConfiguration(CacheWithMemcachedCacheManagerConfiguration.class)
+                .withPropertyValues(
+                        "memcached.cache.expiration=3600",
+                        "memcached.cache.prefix=custom:prefix",
+                        "memcached.cache.namespace=custom_namespace"
+                )
+                .run(context -> {
+                    assertThat(context)
+                            .hasSingleBean(MemcachedCacheManager.class)
+                            .as("Auto-configured disposable instance should not be loaded in context")
+                            .isNotInstanceOf(DisposableMemcachedCacheManager.class);
 
-        MemcachedCacheManager memcachedCacheManager = this.applicationContext.getBean(MemcachedCacheManager.class);
+                    MemcachedCacheManager memcachedCacheManager = cacheManager(context, MemcachedCacheManager.class);
+                    assertMemcachedCacheManager(memcachedCacheManager, Default.EXPIRATION, null, Default.PREFIX, Default.NAMESPACE);
+                });
+    }
 
-        assertThat(memcachedCacheManager)
-                .as("Auto-configured disposable instance should not be loaded in context")
-                .isNotInstanceOf(DisposableMemcachedCacheManager.class);
-        assertMemcachedCacheManager(memcachedCacheManager, Default.EXPIRATION, null, Default.PREFIX, Default.NAMESPACE);
+    @Test
+    public void whenAwsProviderAndMultipleServerListThenMemcachedNotLoaded() {
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues(
+                        String.format("memcached.cache.servers=%s:%d,%s:%d", "memcachedHost1", 11211, "memcachedHost2", 11211),
+                        "memcached.cache.provider=aws"
+                )
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(BeanCreationException.class)
+                        .hasCauseInstanceOf(BeanInstantiationException.class)
+                        .hasMessageContaining("Invalid provider for the XMemcached configuration")
+                );
     }
 
     @Test
     public void whenAppEngineProviderThenAppEngineMemcachedLoaded() {
-        loadContext(CacheConfiguration.class, "memcached.cache.provider=appengine");
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.provider=appengine")
+                .run(context -> {
+                    CacheManager cacheManager = cacheManager(context, CacheManager.class);
+                    assertThat(cacheManager).isInstanceOf(DisposableMemcachedCacheManager.class)
+                            .hasFieldOrProperty("memcachedClient");
+                    assertThat(((DisposableMemcachedCacheManager) cacheManager).memcachedClient)
+                            .isInstanceOf(AppEngineMemcachedClient.class);
+                });
+    }
 
-        CacheManager cacheManager = this.applicationContext.getBean(CacheManager.class);
+    @Test
+    public void whenAppEngineProviderAndNoAppEngineOnClasspathThenMemcachedNotLoaded() {
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.provider=appengine")
+                .withClassLoader(new FilteredClassLoader("com.google.appengine.api.memcache"))
+                .run(context ->  assertThat(context).doesNotHaveBean(MemcachedCacheManager.class));
+    }
 
-        assertThat(cacheManager).isInstanceOf(DisposableMemcachedCacheManager.class);
-        assertThat(((DisposableMemcachedCacheManager) cacheManager).memcachedClient).isInstanceOf(AppEngineMemcachedClient.class);
+    @Test
+    public void whenNoAppEngineOnClasspathThenXMemcachedLoaded() {
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withClassLoader(new FilteredClassLoader("com.google.appengine.api.memcache"))
+                .run(context -> {
+                    CacheManager cacheManager = cacheManager(context, CacheManager.class);
+                    assertThat(cacheManager).isInstanceOf(DisposableMemcachedCacheManager.class)
+                            .hasFieldOrProperty("memcachedClient");
+                    assertThat(((DisposableMemcachedCacheManager) cacheManager).memcachedClient)
+                            .isInstanceOf(XMemcachedClient.class);
+                });
+    }
+
+    @Test
+    public void whenNoAppEngineAndXmemcachedOnClasspathThenSpymemcachedLoaded() {
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withClassLoader(new FilteredClassLoader("net.rubyeye.xmemcached", "com.google.appengine.api.memcache"))
+                .run(context -> {
+                    CacheManager cacheManager = cacheManager(context, CacheManager.class);
+                    assertThat(cacheManager).isInstanceOf(DisposableMemcachedCacheManager.class)
+                            .hasFieldOrProperty("memcachedClient");
+                    assertThat(((DisposableMemcachedCacheManager) cacheManager).memcachedClient)
+                            .isInstanceOf(SpymemcachedClient.class);
+                });
     }
 
     @Test
     public void whenStaticProviderAndEmptyServerListThenMemcachedNotLoaded() {
-        assertThatThrownBy(() ->
-                loadContext(CacheConfiguration.class, "memcached.cache.servers=",
-                        "memcached.cache.provider=static")
-        )
-                .isInstanceOf(UnsatisfiedDependencyException.class)
-                .hasRootCause(new IllegalArgumentException("Server list is empty"));
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues(
+                        "memcached.cache.servers=",
+                        "memcached.cache.provider=static"
+                )
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(UnsatisfiedDependencyException.class)
+                        .hasRootCause(new IllegalArgumentException("Server list is empty"))
+                );
     }
 
     @Test
     public void whenOperationTimeoutZeroThenMemcachedNotLoaded() {
-        assertThatThrownBy(() -> loadContext(CacheConfiguration.class,
-                "memcached.cache.operation-timeout=0"))
-                .isInstanceOf(UnsatisfiedDependencyException.class)
-                .hasRootCause(new IllegalArgumentException("Operation timeout must be greater then zero"));
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.operation-timeout=0")
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(UnsatisfiedDependencyException.class)
+                        .hasRootCause(new IllegalArgumentException("Operation timeout must be greater then zero"))
+                );
     }
 
     @Test
     public void whenOperationTimeoutNegativeThenMemcachedNotLoaded() {
-        assertThatThrownBy(() -> loadContext(CacheConfiguration.class,
-                "memcached.cache.operation-timeout=-1"))
-                .isInstanceOf(UnsatisfiedDependencyException.class)
-                .hasRootCause(new IllegalArgumentException("Operation timeout must be greater then zero"));
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.operation-timeout=-1")
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(UnsatisfiedDependencyException.class)
+                        .hasRootCause(new IllegalArgumentException("Operation timeout must be greater then zero"))
+                );
     }
 
     @Test
     public void whenServersRefreshIntervalZeroThenMemcachedNotLoaded() {
-        assertThatThrownBy(() -> loadContext(CacheConfiguration.class,
-                "memcached.cache.servers-refresh-interval=0"))
-                .isInstanceOf(UnsatisfiedDependencyException.class)
-                .hasRootCause(new IllegalArgumentException("Servers refresh interval must be greater then zero"));
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.servers-refresh-interval=0")
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(UnsatisfiedDependencyException.class)
+                        .hasRootCause(new IllegalArgumentException("Servers refresh interval must be greater then zero"))
+                );
     }
 
     @Test
     public void whenServersRefreshIntervalNegativeThenMemcachedNotLoaded() {
-        assertThatThrownBy(() -> loadContext(CacheConfiguration.class,
-                "memcached.cache.servers-refresh-interval=-1"))
-                .isInstanceOf(UnsatisfiedDependencyException.class)
-                .hasRootCause(new IllegalArgumentException("Servers refresh interval must be greater then zero"));
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues("memcached.cache.servers-refresh-interval=-1")
+                .run(context -> assertThat(context).getFailure()
+                        .isInstanceOf(UnsatisfiedDependencyException.class)
+                        .hasRootCause(new IllegalArgumentException("Servers refresh interval must be greater then zero"))
+                );
     }
 
     @Test
@@ -260,37 +293,36 @@ public class MemcachedAutoConfigurationTest {
 
     @Test
     public void whenStaticProviderAndNoHashStrategyThenMemcachedLoaded() {
-        loadContext(CacheConfiguration.class,
-                "memcached.cache.provider=static");
+        whenHashStrategyThenCorrectSessionLocator(null, ArrayMemcachedSessionLocator.class);
+    }
 
-        MemcachedCacheManager memcachedCacheManager = this.applicationContext.getBean(MemcachedCacheManager.class);
-
-        XMemcachedClient ourXMemcachedClient = (XMemcachedClient) ReflectionTestUtils.getField(memcachedCacheManager, "memcachedClient");
-        net.rubyeye.xmemcached.XMemcachedClient xMemcachedClient = (net.rubyeye.xmemcached.XMemcachedClient) ReflectionTestUtils.getField(ourXMemcachedClient, "memcachedClient");
-
-        assertThat(xMemcachedClient.getSessionLocator()).isInstanceOf(ArrayMemcachedSessionLocator.class);
+    private <T extends CacheManager> T cacheManager(AssertableApplicationContext loaded, Class<T> type) {
+        CacheManager cacheManager = loaded.getBean(CacheManager.class);
+        assertThat(cacheManager).isInstanceOf(type);
+        return type.cast(cacheManager);
     }
 
     private void whenHashStrategyThenCorrectSessionLocator(String hashStrategy, Class<?> memcachedSessionLocatorClass) {
-        loadContext(CacheConfiguration.class,
-                "memcached.cache.provider=static",
-                "memcached.cache.hash_strategy=" + hashStrategy);
+        this.contextRunner.withUserConfiguration(CacheConfiguration.class)
+                .withPropertyValues(
+                        "memcached.cache.provider=static",
+                        hashStrategy != null ? "memcached.cache.hash_strategy=" + hashStrategy : ""
+                )
+                .run(context -> {
+                    MemcachedCacheManager memcachedCacheManager = cacheManager(context, MemcachedCacheManager.class);
+                    assertThat(memcachedCacheManager).hasFieldOrProperty("memcachedClient");
 
-        MemcachedCacheManager memcachedCacheManager = this.applicationContext.getBean(MemcachedCacheManager.class);
+                    XMemcachedClient memcachedClient = (XMemcachedClient) ReflectionTestUtils.getField(memcachedCacheManager, "memcachedClient");
+                    assertThat(memcachedClient)
+                            .isNotNull()
+                            .isInstanceOf(io.sixhours.memcached.cache.XMemcachedClient.class)
+                            .hasFieldOrProperty("memcachedClient");
 
-        XMemcachedClient ourXMemcachedClient = (XMemcachedClient) ReflectionTestUtils.getField(memcachedCacheManager, "memcachedClient");
-        net.rubyeye.xmemcached.XMemcachedClient xMemcachedClient = (net.rubyeye.xmemcached.XMemcachedClient) ReflectionTestUtils.getField(ourXMemcachedClient, "memcachedClient");
+                    net.rubyeye.xmemcached.XMemcachedClient xMemcachedClient = (net.rubyeye.xmemcached.XMemcachedClient) ReflectionTestUtils.getField(memcachedClient, "memcachedClient");
 
-        assertThat(xMemcachedClient.getSessionLocator()).isInstanceOf(memcachedSessionLocatorClass);
-    }
-
-    private void loadContext(Class<?> configuration, String... environment) {
-        TestPropertyValues.of(environment).applyTo(applicationContext);
-
-        applicationContext.register(configuration);
-        applicationContext.register(MemcachedCacheAutoConfiguration.class);
-        applicationContext.register(CacheAutoConfiguration.class);
-        applicationContext.refresh();
+                    assertThat(xMemcachedClient).isNotNull();
+                    assertThat(xMemcachedClient.getSessionLocator()).isInstanceOf(memcachedSessionLocatorClass);
+                });
     }
 
     @Configuration
@@ -325,6 +357,11 @@ public class MemcachedAutoConfigurationTest {
     @Configuration
     @Import(RefreshAutoConfiguration.class)
     static class CacheWithRefreshAutoConfiguration extends CacheConfiguration {
+    }
+
+    // TODO: 10/17/20 How to test for Spymemcached auto configuration i.e. the cache manager ???
+    @Configuration
+    static class CacheWithSpymemcachedConfiguration extends CacheConfiguration {
     }
 
 }

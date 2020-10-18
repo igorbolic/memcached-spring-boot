@@ -42,6 +42,6 @@ import org.springframework.context.annotation.Import;
 @EnableConfigurationProperties(MemcachedCacheProperties.class)
 @AutoConfigureBefore(CacheAutoConfiguration.class)
 @AutoConfigureAfter(name = "org.springframework.cloud.autoconfigure.RefreshAutoConfiguration")
-@Import({AppEngineMemcachedCacheAutoConfiguration.class, XMemcachedCacheAutoConfiguration.class})
+@Import({AppEngineMemcachedCacheAutoConfiguration.class, XMemcachedCacheAutoConfiguration.class, SpymemcachedCacheAutoConfiguration.class})
 public class MemcachedCacheAutoConfiguration {
 }

@@ -31,7 +31,8 @@ import org.springframework.context.annotation.Configuration;
 import java.io.IOException;
 
 /**
- * {@link EnableAutoConfiguration Auto-configuration} for the Memcached cache.
+ * {@link EnableAutoConfiguration Auto-configuration} for the Memcached cache
+ * backed by AppEngine Memcached client.
  * Creates {@link CacheManager} when caching is enabled via {@link EnableCaching}.
  *
  * @author Igor Bolic
