@@ -9,12 +9,15 @@ plugins {
 }
 
 ext {
-    springCloudVersion = 'Hoxton.SR4'
-    xmemcachedVersion = '2.4.6'
-    elasticacheClientVersion = '1.1.2'
     appengineApiVersion = '1.9.80'
+    awaitilityVersion = '4.2.0'
     commonsLoggingVersion = '1.2'
-    testcontainersVersion = '1.16.0'
+    elasticacheClientVersion = '1.1.2'
+    mockitoCoreVersion = '4.0.0'
+    mockitoInlineVersion = '5.2.0'
+    springCloudVersion = 'Hoxton.SR4'
+    testcontainersVersion = '1.17.6'
+    xmemcachedVersion = '2.4.6'
 }
 
 ext.JAVA_GRADLE = "$rootDir/gradle/java.gradle"
@@ -34,7 +37,7 @@ def gitVersion = { ->
     return !version.isEmpty() ? version - 'v' : projectVersion
 }
 
-def resolvedVersion = project.findProperty('release') ? gitVersion() : '2.4.5-SNAPSHOT'
+def resolvedVersion = project.findProperty('release') ? gitVersion() : '2.5.0-SNAPSHOT'
 
 sonarqube {
     properties {

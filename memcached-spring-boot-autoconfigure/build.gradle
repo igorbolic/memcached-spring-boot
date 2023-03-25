@@ -19,7 +19,12 @@ dependencies {
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'javax.cache:cache-api'
+    // For JDK 8 and below, keep on using Mockito 4.
+    testImplementation "org.mockito:mockito-core:${mockitoCoreVersion}"
+    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
     integrationTestImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    // Use mockito-inline only in integration tests
+    integrationTestImplementation "org.mockito:mockito-inline:${mockitoInlineVersion}"
 }
 
 compileJava.dependsOn(processResources)

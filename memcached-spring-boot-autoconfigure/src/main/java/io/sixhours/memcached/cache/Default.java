@@ -15,15 +15,15 @@
  */
 package io.sixhours.memcached.cache;
 
-import static io.sixhours.memcached.cache.MemcachedCacheProperties.Protocol;
+import io.sixhours.memcached.cache.MemcachedCacheProperties.HashStrategy;
+import io.sixhours.memcached.cache.MemcachedCacheProperties.Provider;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 
-import io.sixhours.memcached.cache.MemcachedCacheProperties.HashStrategy;
-import io.sixhours.memcached.cache.MemcachedCacheProperties.Provider;
+import static io.sixhours.memcached.cache.MemcachedCacheProperties.Protocol;
+import static java.util.Collections.singletonList;
 
 /**
  * Default cache configuration values.
@@ -32,8 +32,7 @@ import io.sixhours.memcached.cache.MemcachedCacheProperties.Provider;
  */
 public final class Default {
 
-    public static final List<InetSocketAddress> SERVERS = Collections.unmodifiableList(
-            Collections.singletonList(new InetSocketAddress("localhost", 11211)));
+    public static final List<InetSocketAddress> SERVERS = singletonList(new InetSocketAddress("localhost", 11211));
 
     public static final Provider PROVIDER = Provider.STATIC;
 

@@ -15,6 +15,17 @@
  */
 package io.sixhours.memcached.cache;
 
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.support.NullValue;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
@@ -28,12 +39,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.springframework.cache.Cache;
-import org.springframework.cache.support.NullValue;
 
 /**
  * Memcached cache tests.
@@ -249,6 +254,133 @@ public class MemcachedCacheTest {
         verify(memcachedClient).get(namespaceKey);
         verify(memcachedClient).set(memcachedKey, CACHE_EXPIRATION, NullValue.INSTANCE);
         verify(memcachedClient).touch(namespaceKey, CACHE_EXPIRATION);
+    }
+
+    @Test
+    public void whenPutValueExpirationThirtyDaysMinusSecondThenStoreValue() {
+        int expiration = (int) Duration.ofDays(30).minusSeconds(1).getSeconds();
+
+        memcachedCache = new MemcachedCache(
+                CACHE_NAME,
+                memcachedClient,
+                expiration,
+                CACHE_PREFIX,
+                NAMESPACE_KEY
+        );
+        when(memcachedClient.get(namespaceKey)).thenReturn(NAMESPACE_KEY_VALUE);
+
+        memcachedCache.put(CACHED_OBJECT_KEY, "value");
+
+        verify(memcachedClient).get(namespaceKey);
+        verify(memcachedClient).set(memcachedKey, expiration, "value");
+        verify(memcachedClient).touch(namespaceKey, expiration);
+    }
+
+    @Test
+    public void whenPutValueExpirationUpToThirtyDaysThenStoreValue() {
+        int expiration = (int) Duration.ofDays(30).getSeconds();
+
+        memcachedCache = new MemcachedCache(
+                CACHE_NAME,
+                memcachedClient,
+                expiration,
+                CACHE_PREFIX,
+                NAMESPACE_KEY
+        );
+        when(memcachedClient.get(namespaceKey)).thenReturn(NAMESPACE_KEY_VALUE);
+
+        memcachedCache.put(CACHED_OBJECT_KEY, "value");
+
+        verify(memcachedClient).get(namespaceKey);
+        verify(memcachedClient).set(memcachedKey, expiration, "value");
+        verify(memcachedClient).touch(namespaceKey, expiration);
+    }
+
+    @Test
+    public void whenPutValueExpirationOfThirtyDaysAndOneSecondThenStoreValueUsingUnixTimestamp() {
+        int expiration = (int) Duration.ofDays(30).plusSeconds(1).getSeconds();
+        int expectedExpiration = (int) Instant.now().plusSeconds(expiration).getEpochSecond();
+
+        memcachedCache = new MemcachedCache(
+                CACHE_NAME,
+                memcachedClient,
+                expiration,
+                CACHE_PREFIX,
+                NAMESPACE_KEY
+        );
+        when(memcachedClient.get(namespaceKey)).thenReturn(NAMESPACE_KEY_VALUE);
+
+        memcachedCache.put(CACHED_OBJECT_KEY, "value");
+
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+
+        verify(memcachedClient).get(namespaceKey);
+        verify(memcachedClient).set(eq(memcachedKey), captor.capture(), eq("value"));
+        verify(memcachedClient).touch(eq(namespaceKey), captor.capture());
+
+        List<Integer> actualExpirations = captor.getAllValues();
+        actualExpirations.forEach(exp -> {
+            assertThat(exp).isGreaterThanOrEqualTo(expectedExpiration);
+            assertThat(exp).isLessThanOrEqualTo(expectedExpiration + 1);
+        });
+    }
+
+    @Test
+    public void whenPutValueExpirationOfFiftyDaysAndOneSecondThenStoreValueUsingUnixTimestamp() {
+        int expiration = (int) Duration.ofDays(50).getSeconds();
+        int expectedExpiration = (int) Instant.now().plusSeconds(expiration).getEpochSecond();
+
+        memcachedCache = new MemcachedCache(
+                CACHE_NAME,
+                memcachedClient,
+                expiration,
+                CACHE_PREFIX,
+                NAMESPACE_KEY
+        );
+        when(memcachedClient.get(namespaceKey)).thenReturn(NAMESPACE_KEY_VALUE);
+
+        memcachedCache.put(CACHED_OBJECT_KEY, "50-value");
+
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+
+        verify(memcachedClient).get(namespaceKey);
+        verify(memcachedClient).set(eq(memcachedKey), captor.capture(), eq("50-value"));
+        verify(memcachedClient).touch(eq(namespaceKey), captor.capture());
+
+        List<Integer> actualExpirations = captor.getAllValues();
+        actualExpirations.forEach(exp -> {
+            assertThat(exp).isGreaterThanOrEqualTo(expectedExpiration);
+            assertThat(exp).isLessThanOrEqualTo(expectedExpiration + 1);
+        });
+    }
+
+    @Test
+    public void whenPutValueExpirationOfTenYearsThenStoreValueUsingUnixTimestamp() {
+        int expiration = (int) Duration.ofDays(10 * 365).getSeconds();
+        int expectedExpiration = (int) Instant.now().plusSeconds(expiration).getEpochSecond();
+
+        memcachedCache = new MemcachedCache(
+                CACHE_NAME,
+                memcachedClient,
+                expiration,
+                CACHE_PREFIX,
+                NAMESPACE_KEY
+        );
+        when(memcachedClient.get(namespaceKey)).thenReturn(NAMESPACE_KEY_VALUE);
+
+        memcachedCache.put(CACHED_OBJECT_KEY, "10-years-value");
+
+        ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
+
+        verify(memcachedClient).get(namespaceKey);
+        verify(memcachedClient).set(eq(memcachedKey), captor.capture(), eq("10-years-value"));
+        verify(memcachedClient).touch(eq(namespaceKey), captor.capture());
+
+        List<Integer> actualExpirations = captor.getAllValues();
+        actualExpirations.forEach(exp -> {
+            assertThat(exp).isGreaterThanOrEqualTo(expectedExpiration);
+            assertThat(exp).isLessThanOrEqualTo(expectedExpiration + 1);
+        });
     }
 
     @Test

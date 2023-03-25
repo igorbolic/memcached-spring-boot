@@ -17,6 +17,8 @@ package io.sixhours.memcached.cache;
 
 import org.springframework.cache.support.AbstractValueAdaptingCache;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
@@ -219,7 +221,24 @@ public class MemcachedCache extends AbstractValueAdaptingCache {
             return name;
         }
 
+        /**
+         * Expiration times are specified in unsigned integer seconds. They can be set from 0, meaning "never expire",
+         * to 30 days (60*60*24*30). Any time higher than 30 days is interpreted as a unix timestamp date. If you
+         * want to expire an object on january 1st of next year, this is how you do that.
+         * <p>
+         * The unix timestamp is a way to track time as a running total of seconds. This count starts at the Unix
+         * Epoch on January 1st, 1970 at UTC. Therefore, the unix time stamp is merely the number of seconds between
+         * a particular date and the Unix Epoch.
+         *
+         * @return expiration time as seconds (up to 30 days) or as UNIX timestamp epoch seconds (greater than 30 days).
+         * @see <a href="https://github.com/memcached/memcached/wiki/Programming#expiration">Memcached Expiration</a>
+         * @see <a href="https://www.unixtimestamp.com/">Unix timestamp</a>
+         */
         public int expiration() {
+            // If the expiration is greater than 30 days: expiration time = UNIX timestamp + expiration
+            if (this.expiration > Duration.ofDays(30).getSeconds()) {
+                return (int) Instant.now().plusSeconds(expiration).getEpochSecond();
+            }
             return expiration;
         }
 

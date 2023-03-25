@@ -15,7 +15,10 @@
  */
 package io.sixhours.memcached.cache;
 
-import static io.sixhours.memcached.cache.Default.SERVERS_REFRESH_INTERVAL;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.convert.DurationStyle;
+import org.springframework.boot.convert.DurationUnit;
+import org.springframework.util.StringUtils;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -28,11 +31,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.convert.DurationStyle;
-import org.springframework.boot.convert.DurationUnit;
-import org.springframework.util.StringUtils;
 
 /**
  * Configuration properties for Memcached cache.
@@ -69,6 +67,10 @@ public class MemcachedCacheProperties {
     @DurationUnit(ChronoUnit.SECONDS)
     private Duration expiration = Duration.ofSeconds(Default.EXPIRATION);
 
+    /**
+     * Cache expiration per cache. The map contains cache name as the key and expiration as the value.
+     * The expiration value in the map will override default {@code expiration} for the cache named as key.
+     */
     private Map<String, Duration> expirationPerCache = new HashMap<>();
 
     /**
@@ -91,7 +93,7 @@ public class MemcachedCacheProperties {
      * Amazon ElastiCache configuration polling interval in milliseconds that refreshes the list of cache node hostnames and IP
      * addresses.  The default is 60000 milliseconds
      */
-    private Duration serversRefreshInterval = SERVERS_REFRESH_INTERVAL;
+    private Duration serversRefreshInterval = Default.SERVERS_REFRESH_INTERVAL;
 
     /**
      * Memcached client hash strategy for distribution of data between servers. Supports 'standard' (array based :
@@ -111,7 +113,7 @@ public class MemcachedCacheProperties {
      * @param value Comma-separated list
      */
     public void setServers(String value) {
-        if (StringUtils.isEmpty(value)) {
+        if (value == null || StringUtils.isEmpty(value)) {
             throw new IllegalArgumentException("Server list is empty");
         }
         this.servers = Stream.of(value.split("\\s*,\\s*"))
@@ -188,7 +190,7 @@ public class MemcachedCacheProperties {
     }
 
     public void setOperationTimeout(Duration operationTimeout) {
-        if (Duration.ZERO.compareTo(operationTimeout) >= 0) {
+        if (operationTimeout == null || Duration.ZERO.compareTo(operationTimeout) >= 0) {
             throw new IllegalArgumentException("Operation timeout must be greater then zero");
         }
         this.operationTimeout = operationTimeout;
@@ -199,15 +201,15 @@ public class MemcachedCacheProperties {
     }
 
     public void setServersRefreshInterval(Duration serversRefreshInterval) {
-        if (Duration.ZERO.compareTo(serversRefreshInterval) >= 0) {
+        if (serversRefreshInterval == null || Duration.ZERO.compareTo(serversRefreshInterval) >= 0) {
             throw new IllegalArgumentException("Servers refresh interval must be greater then zero");
         }
         this.serversRefreshInterval = serversRefreshInterval;
     }
 
     private void validateExpiration(Duration expiration) {
-        if (expiration == null || expiration.toDays() > 30) {
-            throw new IllegalStateException("Invalid expiration. It should not be null or greater than 30 days.");
+        if (expiration == null || expiration.isNegative()) {
+            throw new IllegalArgumentException("Invalid expiration. Duration must be greater than or equal to 0 (zero) seconds.");
         }
     }
 

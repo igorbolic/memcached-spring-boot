@@ -76,7 +76,7 @@ To plug-in Memcached cache in your application follow the steps below:
      memcached.cache:
        servers: example1.com:11211,example2.com:11211
        provider: static
-       # default expiration is '1d' ('86400' seconds) and custom ones for cache_name1 and cache_name2
+       # default expiration set to '1d' (1 day i.e. '86400' seconds) and custom ones for cache_name1 and cache_name2
        expiration: 1d
        expiration-per-cache:
          cache_name1: 1h
@@ -148,8 +148,8 @@ full list of supported properties:
 # MEMCACHED CACHE
 memcached.cache.servers: # Comma-separated list of hostname:port for memcached servers (default "localhost:11211")
 memcached.cache.provider: # Memcached server provider (use one of following: "static", "aws" or "appengine"). Default provider is "static". Use "aws" for AWS node auto discovery, or "appengine" if running on Google Cloud Platform.
-memcached.cache.expiration: # Default cache expiration if not configured per cache (default "0", meaning that cache will never expire). If unit not specified, seconds will be used.
-memcached.cache.expiration-per-cache.cacheName: # To set expiration value for cache named "cacheName" {cache_name}:{number} e.g. "authors: 3600" or "authors: 1h". If unit not specified, seconds will be used.
+memcached.cache.expiration: # Default cache expiration (defaults to "0", meaning that cache will never expire). If duration unit is not specified, seconds will be used by default.
+memcached.cache.expiration-per-cache.cacheName: # Set expiration for cache with given name. Overrides `memcached.cache.expiration` for the given cache. To set expiration value for cache named "cacheName" {cache_name}:{number} e.g. "authors: 3600" or "authors: 1h". If duration unit is not specified, seconds will be used by default.
 memcached.cache.prefix: # Cache key prefix (default "memcached:spring-boot")
 memcached.cache.protocol: # Memcached client protocol. Supports "text" and "binary" protocols (default is "text" protocol)
 memcached.cache.operation-timeout: # Memcached client operation timeout (default "2500 milliseconds"). If unit not specified, milliseconds will be used.
