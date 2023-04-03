@@ -22,7 +22,7 @@ jobs:
           - java: 17
             sonar: false
     name: Build
-    if: github.repository == 'sixhours-team/memcached-spring-boot'
+#    if: github.repository == 'sixhours-team/memcached-spring-boot'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
